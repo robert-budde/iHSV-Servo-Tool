@@ -14,7 +14,7 @@ You should know what is needed.
 
 You may install [Anaconda Python Environment](https://conda.io/docs/user-guide/install/index.html "Anaconda Website") (Choose the Python3-flavour!).
 
-After installing, you can install the other prerequisites using [conda](https://conda.io/docs/user-guide/tasks/manage-pkgs.html) and pip. Depending on your Anaconda-path, you will need to start the "Anaconda Prompt" with adminitrative priviledges.
+After installing, you can install the other prerequisites using [conda](https://conda.io/docs/user-guide/tasks/manage-pkgs.html) and pip. Depending on your Anaconda-path, you will need to start the "Anaconda Prompt" with administrative privileges.
 * conda install pyqt pyqtgraph pyserial numpy
 * conda install -c auto minimalmodbus
 * pip install minimalmodbus
@@ -23,7 +23,7 @@ After that, you should be able to run "iHSV Servo Tool" executing "python iHSV-S
 
 ## Operation
 
-The program stores its window location, size, comport and the settings for each plot (color, if its active and the axis it scales with) when exited. Upon restart, all settings will be restored.
+The program stores its window location, size, comport and the settings for each plot (its color, if it's active and the axis it scales with) when exited. Upon restart, all settings will be restored.
 
 1. Start by selecting the comport connected to your JMC iHSV servo. (Remark: You will need TRUE RS232 levels, 3.3V logic level will NOT work!)
 2. "Open Comport"

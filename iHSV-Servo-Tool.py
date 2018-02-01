@@ -29,7 +29,7 @@ import minimalmodbus
 
 class ModBusDataPlot(QWidget):
 
-    signalChangeAxis = pyqtSignal(bool, pg.PlotCurveItem, name='ChangeAxis')
+    signalAttachToAxis = pyqtSignal(pg.PlotCurveItem, bool, name='AttachToAxis')
 
     def __init__(self, name='None', registers=[], signed=False, settings=None):
         super().__init__(None)
@@ -49,7 +49,7 @@ class ModBusDataPlot(QWidget):
         self.activeCheckbox = QCheckBox('Active')
         self.activeCheckbox.toggled.connect(self.setActive)
         self.axisCheckbox = QCheckBox('2nd Y')
-        self.axisCheckbox.toggled.connect(self.changeAxis)
+        self.axisCheckbox.toggled.connect(self.attachToAxis)
         self.layout = QGridLayout(self)
         self.layout.addWidget(self.colorButton, 0, 0, 1, 2)
         self.layout.setColumnMinimumWidth(0, 30)
@@ -101,8 +101,8 @@ class ModBusDataPlot(QWidget):
         else:
             self.curve.setData([])
 
-    def changeAxis(self):
-        self.signalChangeAxis.emit(self.axisCheckbox.isChecked(), self.curve)
+    def attachToAxis(self):
+        self.signalAttachToAxis.emit(self.curve, self.axisCheckbox.isChecked())
 
     def update(self, rawValues):
         self.data = np.roll(self.data,-1)
@@ -222,18 +222,19 @@ class MainWindow(QMainWindow):
         self.plot.setXRange(-100, 0)
         self.plot.setYRange(-200, 200)
         self.plot.setLimits(xMin=-1000,xMax=0,minXRange=20,maxXRange=1000)
-        self.plot.setLabel('bottom', text='Time', units='ms')
+        self.plot.setLabel('bottom', text='Time', units='s')
+        self.plot.getAxis('bottom').setScale(0.01)
         self.plot.showAxis('right')
 
-        self.plot2ndAcis = pg.ViewBox()
-        self.plot.scene().addItem(self.plot2ndAcis)
-        self.plot.getAxis('right').linkToView(self.plot2ndAcis)
-        self.plot2ndAcis.setXLink(self.plot)
-        self.plot2ndAcis.setYRange(-10,10)
+        self.plot2ndAxis = pg.ViewBox()
+        self.plot.scene().addItem(self.plot2ndAxis)
+        self.plot.getAxis('right').linkToView(self.plot2ndAxis)
+        self.plot2ndAxis.setXLink(self.plot)
+        self.plot2ndAxis.setYRange(-10,10)
 
         def updateViews():
-            self.plot2ndAcis.setGeometry(self.plot.getViewBox().sceneBoundingRect())
-            self.plot2ndAcis.linkedViewChanged(self.plot.getViewBox(), self.plot2ndAcis.XAxis)
+            self.plot2ndAxis.setGeometry(self.plot.getViewBox().sceneBoundingRect())
+            self.plot2ndAxis.linkedViewChanged(self.plot.getViewBox(), self.plot2ndAxis.XAxis)
 
         updateViews()
         self.plot.getViewBox().sigResized.connect(updateViews)
@@ -242,10 +243,10 @@ class MainWindow(QMainWindow):
         self.mdps = [];
         for liveDataInfo in self.liveDataInfos:
             mdp = ModBusDataPlot(liveDataInfo[2], liveDataInfo[0], liveDataInfo[1], settings=self.settings)
-            mdp.signalChangeAxis.connect(self.changeAxis)
+            mdp.signalAttachToAxis.connect(self.attachToAxis)
+            mdp.attachToAxis()
             self.mdps.append(mdp)
             vbox.addWidget(mdp);
-            self.plot.addItem(mdp.curve);
 
         self.groupBox = QGroupBox('Data plots')
         vbox.addStretch(1);
@@ -276,13 +277,15 @@ class MainWindow(QMainWindow):
         
         self.statusBar().showMessage("Ready", 2000)
 
-    def changeAxis(self, secondAxis, curve):
+    def attachToAxis(self, curve, secondAxis):
         if secondAxis:
-           self.plot.removeItem(curve)
-           self.plot2ndAcis.addItem(curve)
+            if curve in self.plot.listDataItems():
+                self.plot.removeItem(curve)
+            self.plot2ndAxis.addItem(curve)
         else:
-           self.plot2ndAcis.removeItem(curve)
-           self.plot.addItem(curve)
+            if curve in self.plot.listDataItems():
+                self.plot2ndAxis.removeItem(curve)
+            self.plot.addItem(curve)
 
     def openCloseComport(self):
         if (self.pbOpenCloseComport.text() == 'Open Comport'):

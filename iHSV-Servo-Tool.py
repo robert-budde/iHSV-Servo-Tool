@@ -27,60 +27,55 @@ import serial
 import minimalmodbus
 
 
-class ModBusDataPlot(QWidget):
+class ModBusDataCurveItem(pg.PlotCurveItem):
 
-    signalAttachToAxis = pyqtSignal(pg.PlotCurveItem, bool, name='AttachToAxis')
+    signalIsActive = pyqtSignal(pg.PlotCurveItem, name='IsActive')
+    signalAttachToAxis = pyqtSignal(pg.PlotCurveItem, name='AttachToAxis')
 
     def __init__(self, name='None', registers=[], signed=False, settings=None):
-        super().__init__(None)
+        super().__init__(connect="finite", name=name)
 
-        self.name = name
         self.registers = registers
         self.signed = signed
         self.settings = settings
+        self.color = QColor(255,255,255)
 
+        self.widget = QWidget()
+        layout = QGridLayout(self.widget)
         self.colorButton = QPushButton()
         self.colorButton.setFixedWidth(20)
         self.colorButton.setFixedHeight(20)
         self.colorButton.clicked.connect(self.chooseColor)
-        self.color = QColor(255,255,255)
-
-        self.label = QLabel(name)
+        self.label = QLabel(self.name())
         self.activeCheckbox = QCheckBox('Active')
         self.activeCheckbox.toggled.connect(self.setActive)
         self.axisCheckbox = QCheckBox('2nd Y')
         self.axisCheckbox.toggled.connect(self.attachToAxis)
-        self.layout = QGridLayout(self)
-        self.layout.addWidget(self.colorButton, 0, 0, 1, 2)
-        self.layout.setColumnMinimumWidth(0, 30)
-        self.layout.addWidget(self.label, 0, 1, 1, 2)
-        self.layout.setColumnMinimumWidth(1, 100)
-        self.layout.setColumnStretch(1, 0.5)
-        self.layout.addWidget(self.activeCheckbox, 0, 2)
-        self.layout.addWidget(self.axisCheckbox, 1, 2)
-        self.layout.setColumnMinimumWidth(2, 50)
-        self.layout.setColumnStretch(2, 0.5)
-
-        self.curve = pg.PlotCurveItem(connect="finite")
-        self.curve.setPos(-1000, 0)
-        self.data = np.empty(1001)
-        self.data.fill(np.nan)
+        layout.addWidget(self.colorButton, 0, 0, 1, 2)
+        layout.setColumnMinimumWidth(0, 30)
+        layout.addWidget(self.label, 0, 1, 1, 2)
+        layout.setColumnMinimumWidth(1, 100)
+        layout.setColumnStretch(1, 0.5)
+        layout.addWidget(self.activeCheckbox, 0, 2)
+        layout.addWidget(self.axisCheckbox, 1, 2)
+        layout.setColumnMinimumWidth(2, 50)
+        layout.setColumnStretch(2, 0.5)
 
         self.readSettings()
 
     def readSettings(self):
         try:
-            self.setColor(self.settings.value(self.name + "/Color", QColor(255,255,255)))
-            self.activeCheckbox.setChecked(self.settings.value(self.name + "/Active", False, type=bool))
-            self.axisCheckbox.setChecked(self.settings.value(self.name + "/2ndAxis", False, type=bool))
+            self.setColor(self.settings.value(self.name() + "/Color", QColor(255,255,255)))
+            self.activeCheckbox.setChecked(self.settings.value(self.name() + "/Active", False, type=bool))
+            self.axisCheckbox.setChecked(self.settings.value(self.name() + "/2ndAxis", False, type=bool))
         except:
             pass
 
     def writeSettings(self):
         try:
-            self.settings.setValue(self.name + "/Color", self.color)
-            self.settings.setValue(self.name + "/Active", self.activeCheckbox.isChecked())
-            self.settings.setValue(self.name + "/2ndAxis", self.axisCheckbox.isChecked())
+            self.settings.setValue(self.name() + "/Color", self.color)
+            self.settings.setValue(self.name() + "/Active", self.activeCheckbox.isChecked())
+            self.settings.setValue(self.name() + "/2ndAxis", self.axisCheckbox.isChecked())
         except:
             pass
 
@@ -89,23 +84,27 @@ class ModBusDataPlot(QWidget):
             self.color = color
             self.colorButton.setStyleSheet("QPushButton { background-color: %s }" % (color.name()))
             pen = pg.mkPen(self.color, width=2)
-            self.curve.setPen(pen)
+            self.setPen(pen)
 
     def chooseColor(self):
         color = QColorDialog.getColor(self.color)
         self.setColor(color)
 
     def setActive(self):
-        if self.isActive():
-            self.curve.setData(self.data)
-        else:
-            self.curve.setData([])
+        self.setData()
+        self.signalIsActive.emit(self)
+
+    def isActive(self):
+        return self.activeCheckbox.isChecked()
 
     def attachToAxis(self):
-        self.signalAttachToAxis.emit(self.curve, self.axisCheckbox.isChecked())
+        self.signalAttachToAxis.emit(self)
 
-    def update(self, rawValues):
-        self.data = np.roll(self.data,-1)
+    @property
+    def On2ndAxis(self):
+        return self.axisCheckbox.isChecked()
+
+    def appendData(self, rawValues):
         if len(rawValues) == 2:
             value = (rawValues[0] << 16) | rawValues[1]
             if (0x80000000 & value): 
@@ -117,22 +116,22 @@ class ModBusDataPlot(QWidget):
         else:
             value = rawValues[0]
 
-        self.data[-1] = value
-        self.curve.setData(self.data)
-
-    def fadeOut(self):
-        self.data = np.roll(self.data,-1)
-        self.data[-1] = np.nan
-
-    def resetData(self):
-        self.data.fill(np.nan)       
-        self.curve.setData([])
+        if (self.yData is None):
+            self.setData([value])
+            self.setPos(0, 0)
+        elif (len(self.yData) <= 1000):
+            self.setData(np.append(self.yData, value))
+            self.setPos(-len(self.yData)+1, 0)
+        else:
+            self.yData = np.roll(self.yData,-1)
+            self.yData[-1] = value
+            # avoid copying data - xData etc. remain the same
+            self.path = None # required to trigger path update
+            self.update()
+            self.sigPlotChanged.emit(self)
 
     def getRegisters(self):
         return self.registers
-
-    def isActive(self):
-        return self.activeCheckbox.isChecked()
 
 class MainWindow(QMainWindow):
     configDataInfos = [
@@ -175,9 +174,11 @@ class MainWindow(QMainWindow):
         [[0x85,0x86], False, 'Pos Cmd'],
         [[0x87,0x88], False, 'Real Pos'],
         [[0x89], True, 'Pos Error'],
+
         [[0x90], True, 'Vel Cmd [Rpm]'],
         [[0x91], True, 'Real Vel [Rpm]'],
         [[0x92], True, 'Vel Error [Rpm]'],
+
         [[0xA0], True, 'Torque Current Cmd'],
         [[0xA1], True, 'Real Torque Current'],
     ]
@@ -186,25 +187,18 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
 
         self.setWindowTitle("iHSV57 Servo Tool")
-        
+
         self.settings = QSettings("IBB", "iHSV57 Servo Tool")
-
-        ## Define a top-level widget to hold everything
-        self.widget = QWidget()
-
-        ## Create a grid layout to manage the widgets size and position
-        self.layout = QGridLayout()
-        self.widget.setLayout(self.layout)
 
         ## Create some widgets to be placed inside
         self.cbSelectComport = QComboBox()
         self.pbOpenCloseComport = QPushButton('Open Comport')
         self.pbOpenCloseComport.clicked.connect(self.openCloseComport)
         self.pbReadParams = QPushButton('Read Parameters')
-        self.pbReadParams.clicked.connect(self.readParams)     
+        self.pbReadParams.clicked.connect(self.readParams)
         self.pbStartStopMonitor = QPushButton('Start Monitor')
         self.pbStartStopMonitor.setFixedHeight(100)
-        self.pbStartStopMonitor.clicked.connect(self.startStopMonitor)     
+        self.pbStartStopMonitor.clicked.connect(self.startStopMonitor)
 
         self.ParamTable = QTableWidget(20, 3, self)
         self.ParamTable.setHorizontalHeaderLabels(('Register', 'Value', 'Description'))
@@ -240,30 +234,37 @@ class MainWindow(QMainWindow):
         self.plot.getViewBox().sigResized.connect(updateViews)
 
         vbox = QVBoxLayout()
-        self.mdps = [];
+        self.mdps = {};
         for liveDataInfo in self.liveDataInfos:
-            mdp = ModBusDataPlot(liveDataInfo[2], liveDataInfo[0], liveDataInfo[1], settings=self.settings)
-            mdp.signalAttachToAxis.connect(self.attachToAxis)
+            regs = liveDataInfo[0]
+            mdp = ModBusDataCurveItem(liveDataInfo[2], regs, liveDataInfo[1], settings=self.settings)
+            mdp.signalAttachToAxis.connect(self.attachCurve)
             mdp.attachToAxis()
-            self.mdps.append(mdp)
-            vbox.addWidget(mdp);
+            self.mdps.update({regs[0]: mdp})
+            vbox.addWidget(mdp.widget)
 
         self.groupBox = QGroupBox('Data plots')
-        vbox.addStretch(1);
-        self.groupBox.setLayout(vbox);
+        vbox.addStretch(1)
+        self.groupBox.setLayout(vbox)
+
+        ## Define a top-level widget to hold everything
+        self.widget = QWidget()
+
+        ## Create a grid layout to manage the widgets size and position
+        layout = QGridLayout(self.widget)
 
         ## Add widgets to the layout in their proper positions
-        self.layout.addWidget(self.plot, 0, 0, 1, 2)  # plot goes on top, spanning 2 columns
-        self.layout.addWidget(self.groupBox, 0, 2)  # legend to the right
-        self.layout.setColumnMinimumWidth(0, 200)
-        self.layout.setColumnStretch(1, 1)
-        self.layout.setColumnMinimumWidth(1, 200)
-        self.layout.setColumnMinimumWidth(2, 200)
-        self.layout.addWidget(self.cbSelectComport, 1, 0)   # comport-combobox goes in upper-left
-        self.layout.addWidget(self.pbOpenCloseComport, 2, 0)   # open/close button goes in middle-left
-        self.layout.addWidget(self.pbReadParams, 3, 0)
-        self.layout.addWidget(self.pbStartStopMonitor, 4, 0)
-        self.layout.addWidget(self.ParamTable, 1, 1, 4, 2)  # list widget goes in bottom-left
+        layout.addWidget(self.plot, 0, 0, 1, 2)  # plot goes on top, spanning 2 columns
+        layout.addWidget(self.groupBox, 0, 2)  # legend to the right
+        layout.setColumnMinimumWidth(0, 200)
+        layout.setColumnStretch(1, 1)
+        layout.setColumnMinimumWidth(1, 200)
+        layout.setColumnMinimumWidth(2, 200)
+        layout.addWidget(self.cbSelectComport, 1, 0)   # comport-combobox goes in upper-left
+        layout.addWidget(self.pbOpenCloseComport, 2, 0)   # open/close button goes in middle-left
+        layout.addWidget(self.pbReadParams, 3, 0)
+        layout.addWidget(self.pbStartStopMonitor, 4, 0)
+        layout.addWidget(self.ParamTable, 1, 1, 4, 2)  # list widget goes in bottom-left
 
         self.setCentralWidget(self.widget)
 
@@ -277,8 +278,8 @@ class MainWindow(QMainWindow):
         
         self.statusBar().showMessage("Ready", 2000)
 
-    def attachToAxis(self, curve, secondAxis):
-        if secondAxis:
+    def attachCurve(self, curve):
+        if curve.On2ndAxis:
             if curve in self.plot.listDataItems():
                 self.plot.removeItem(curve)
             self.plot2ndAxis.addItem(curve)
@@ -304,7 +305,7 @@ class MainWindow(QMainWindow):
                 self.servo.read_register(0x80)
             except:
                 self.statusBar().showMessage("Device does not respond", 2000)
-                return            
+                return
             self.statusBar().showMessage("Port opened successfully", 2000)
         else:
             try:
@@ -351,26 +352,44 @@ class MainWindow(QMainWindow):
         self.servo.write_register(reg, value, functioncode=6)
         self.statusBar().showMessage("Writing {0} to 0x{1:02x} done!".format(value, reg), 2000)
 
-    def updatePlots(self):
-        for mdp in self.mdps:
-            if mdp.isActive():
-                regs = mdp.getRegisters()
-                values = self.servo.read_registers(regs[0], len(regs))
-                mdp.update(values)
-            else:
-                mdp.fadeOut()
+    def updateCurves(self):
+        # get tuples of active curve handles and their registers
+        amdps_regs = [(mdp, mdp.getRegisters()) for mdp in self.mdps.values() if mdp.isActive()]
+        #print(amdps_regs)
+
+        # get list of all registers that need to be read
+        regs_list = [reg for amdp_regs in amdps_regs for reg in amdp_regs[1]]
+        #print(regs_list)
+
+        # get list of aggregated lists
+        regs_aggr = np.split(regs_list, np.where(np.diff(regs_list) != 1)[0]+1)
+        #print(regs_aggr)
+
+        regs_values = []
+        for regs in regs_aggr:
+            regs_values += zip(regs, self.servo.read_registers(int(regs[0]), len(regs)))
+            #values = zip(regs, np.random.randn(len(regs)))
+        #regs_values = [reg_value for regs in regs_aggr for zip(regs, self.servo.read_registers(int(regs[0]), len(regs))) in regs]
+        #print(regs_values)
+            
+        for amdp_regs in amdps_regs:
+            values = []
+            for reg in amdp_regs[1]:
+                values += [reg_value[1] for reg_value in regs_values if reg_value[0] == reg]
+            amdp_regs[0].appendData(values)
 
     def startStopMonitor(self):
         if (self.pbOpenCloseComport.text() == 'Open Comport'):
             return
         if (self.pbStartStopMonitor.text() == 'Start Monitor'):
             self.monitorTimer = QTimer()
-            self.monitorTimer.timeout.connect(self.updatePlots)
+            self.monitorTimer.timeout.connect(self.updateCurves)
             self.monitorTimer.start(10)
-            self.pbStartStopMonitor.setText('Stop Monitor')      
+            self.pbStartStopMonitor.setText('Stop Monitor')
             self.statusBar().showMessage("Monitor started", 2000)
-            for mdp in self.mdps:
-                mdp.resetData()
+            #print(self.mdps)
+            for mdp in self.mdps.values():
+                mdp.setData()
         else:
             self.monitorTimer.stop()
             self.statusBar().showMessage("Monitor stopped", 2000)
@@ -394,7 +413,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("pos", self.pos())
         self.settings.setValue("size", self.size())
         self.settings.setValue("comport", self.cbSelectComport.currentText())
-        for mdp in self.mdps:
+        for mdp in self.mdps.values():
             mdp.writeSettings()
 
 if __name__ == '__main__':

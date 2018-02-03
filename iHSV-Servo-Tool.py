@@ -234,14 +234,14 @@ class MainWindow(QMainWindow):
         self.plot.getViewBox().sigResized.connect(updateViews)
 
         vbox = QVBoxLayout()
-        self.mdps = {};
+        self.curves = [];
         for liveDataInfo in self.liveDataInfos:
             regs = liveDataInfo[0]
-            mdp = ModBusDataCurveItem(liveDataInfo[2], regs, liveDataInfo[1], settings=self.settings)
-            mdp.signalAttachToAxis.connect(self.attachCurve)
-            mdp.attachToAxis()
-            self.mdps.update({regs[0]: mdp})
-            vbox.addWidget(mdp.widget)
+            curve = ModBusDataCurveItem(liveDataInfo[2], regs, liveDataInfo[1], settings=self.settings)
+            curve.signalAttachToAxis.connect(self.attachCurve)
+            curve.attachToAxis()
+            self.curves += [curve]
+            vbox.addWidget(curve.widget)
 
         self.groupBox = QGroupBox('Data plots')
         vbox.addStretch(1)
@@ -353,30 +353,29 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Writing {0} to 0x{1:02x} done!".format(value, reg), 2000)
 
     def updateCurves(self):
-        # get tuples of active curve handles and their registers
-        amdps_regs = [(mdp, mdp.getRegisters()) for mdp in self.mdps.values() if mdp.isActive()]
-        #print(amdps_regs)
+        # get dictionary of active curves and their registers
+        curves_regs = {curve: curve.getRegisters() for curve in self.curves if curve.isActive()}
+        #print(curves_regs)
 
         # get list of all registers that need to be read
-        regs_list = [reg for amdp_regs in amdps_regs for reg in amdp_regs[1]]
+        regs_list = [reg for regs in curves_regs.values() for reg in regs]
         #print(regs_list)
 
-        # get list of aggregated lists
-        regs_aggr = np.split(regs_list, np.where(np.diff(regs_list) != 1)[0]+1)
+        # get list of aggregated lists (tolerate gaps of up to 2 regs)
+        regs_aggr = np.split(regs_list, np.where(np.diff(regs_list) > 3)[0]+1)
+        # intermediate step to fill in gaps if gaps were allowed
+        regs_aggr = [range(regs_range[0], regs_range[-1]+1) for regs_range in regs_aggr]
         #print(regs_aggr)
 
-        regs_values = []
-        for regs in regs_aggr:
-            regs_values += zip(regs, self.servo.read_registers(int(regs[0]), len(regs)))
-            #values = zip(regs, np.random.randn(len(regs)))
-        #regs_values = [reg_value for regs in regs_aggr for zip(regs, self.servo.read_registers(int(regs[0]), len(regs))) in regs]
+        # use aggregated regs to read all values and create dictionary with reg:value pairs
+        regs_values = dict([reg_value for regs in regs_aggr for reg_value in zip(regs, self.servo.read_registers(int(regs[0]), len(regs)))])
+        #regs_values = dict([reg_value for regs in regs_aggr for reg_value in zip(regs, np.random.randn(len(regs)))])
         #print(regs_values)
-            
-        for amdp_regs in amdps_regs:
-            values = []
-            for reg in amdp_regs[1]:
-                values += [reg_value[1] for reg_value in regs_values if reg_value[0] == reg]
-            amdp_regs[0].appendData(values)
+
+        # iterate active curves and use associated regs to look up values
+        for curve,regs in curves_regs.items():
+            values = [regs_values[reg] for reg in regs] 
+            curve.appendData(values)
 
     def startStopMonitor(self):
         if (self.pbOpenCloseComport.text() == 'Open Comport'):
@@ -387,9 +386,9 @@ class MainWindow(QMainWindow):
             self.monitorTimer.start(10)
             self.pbStartStopMonitor.setText('Stop Monitor')
             self.statusBar().showMessage("Monitor started", 2000)
-            #print(self.mdps)
-            for mdp in self.mdps.values():
-                mdp.setData()
+            #print(self.curves)
+            for curve in self.curves:
+                curve.setData()
         else:
             self.monitorTimer.stop()
             self.statusBar().showMessage("Monitor stopped", 2000)
@@ -413,8 +412,8 @@ class MainWindow(QMainWindow):
         self.settings.setValue("pos", self.pos())
         self.settings.setValue("size", self.size())
         self.settings.setValue("comport", self.cbSelectComport.currentText())
-        for mdp in self.mdps.values():
-            mdp.writeSettings()
+        for curve in self.curves:
+            curve.writeSettings()
 
 if __name__ == '__main__':
 

@@ -189,6 +189,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("iHSV57 Servo Tool")
 
         self.settings = QSettings("IBB", "iHSV57 Servo Tool")
+        self.connected = False
 
         ## Create some widgets to be placed inside
         self.cbSelectComport = QComboBox()
@@ -279,17 +280,20 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready", 2000)
 
     def attachCurve(self, curve):
-        if curve.On2ndAxis:
-            if curve in self.plot.listDataItems():
-                self.plot.removeItem(curve)
-            self.plot2ndAxis.addItem(curve)
-        else:
-            if curve in self.plot.listDataItems():
-                self.plot2ndAxis.removeItem(curve)
-            self.plot.addItem(curve)
+        try:
+            if curve.On2ndAxis:
+                if curve in self.plot.listDataItems():
+                    self.plot.removeItem(curve)
+                self.plot2ndAxis.addItem(curve)
+            else:
+                if curve in self.plot.listDataItems():
+                    self.plot2ndAxis.removeItem(curve)
+                self.plot.addItem(curve)
+        except:
+            print('Error attaching curve')
 
     def openCloseComport(self):
-        if (self.pbOpenCloseComport.text() == 'Open Comport'):
+        if not self.connected:
             try:
                 self.servo = minimalmodbus.Instrument(self.cbSelectComport.currentText(), 1)
                 self.servo.serial.baudrate = 57600   # Baud
@@ -300,13 +304,15 @@ class MainWindow(QMainWindow):
             except:
                 self.statusBar().showMessage("Failed to open port", 2000)
                 return
-            self.pbOpenCloseComport.setText('Close Comport')
             try:
                 self.servo.read_register(0x80)
+                self.statusBar().showMessage("Port opened successfully", 2000)
+                self.pbOpenCloseComport.setText('Close Comport')
+                self.connected = True
             except:
+                self.servo.serial.close()
                 self.statusBar().showMessage("Device does not respond", 2000)
                 return
-            self.statusBar().showMessage("Port opened successfully", 2000)
         else:
             try:
                 self.servo.serial.close()
@@ -314,9 +320,10 @@ class MainWindow(QMainWindow):
             except:
                 pass
             self.pbOpenCloseComport.setText('Open Comport')
+            self.connected = False
 
     def readParams(self):
-        if (self.pbOpenCloseComport.text() == 'Open Comport'):
+        if not self.connected:
             return
         try:
             self.ParamTable.cellChanged.disconnect(self.writeParams)
@@ -339,7 +346,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Loading System Params done!", 2000)
 
     def writeParams(self, row, column):
-        if (self.pbOpenCloseComport.text() == 'Open Comport'):
+        if not self.connected:
             return
         if column != 1:
             return
@@ -353,33 +360,38 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Writing {0} to 0x{1:02x} done!".format(value, reg), 2000)
 
     def updateCurves(self):
-        # get dictionary of active curves and their registers
-        curves_regs = {curve: curve.getRegisters() for curve in self.curves if curve.isActive()}
-        #print(curves_regs)
+        try:
+            # get dictionary of active curves and their registers
+            curves_regs = {curve: curve.getRegisters() for curve in self.curves if curve.isActive()}
+            #print(curves_regs)
+            if (len(curves_regs) == 0):
+                return
 
-        # get list of all registers that need to be read
-        regs_list = [reg for regs in curves_regs.values() for reg in regs]
-        #print(regs_list)
+            # get list of all registers that need to be read
+            regs_list = [reg for regs in curves_regs.values() for reg in regs]
+            #print(regs_list)
 
-        # get list of aggregated lists (tolerate gaps of up to 2 regs)
-        regs_aggr = np.split(regs_list, np.where(np.diff(regs_list) > 3)[0]+1)
-        # intermediate step to fill in gaps if gaps were allowed
-        regs_aggr = [range(regs_range[0], regs_range[-1]+1) for regs_range in regs_aggr]
-        #print(regs_aggr)
+            # get list of aggregated lists (tolerate gaps of up to 2 regs)
+            regs_aggr = np.split(regs_list, np.where(np.diff(regs_list) > 3)[0]+1)
+            # intermediate step to fill in gaps if gaps were allowed
+            regs_aggr = [range(regs_range[0], regs_range[-1]+1) for regs_range in regs_aggr]
+            #print(regs_aggr)
 
-        # use aggregated regs to read all values and create dictionary with reg:value pairs
-        regs_values = dict([reg_value for regs in regs_aggr for reg_value in zip(regs, self.servo.read_registers(int(regs[0]), len(regs)))])
-        #regs_values = dict([reg_value for regs in regs_aggr for reg_value in zip(regs, np.random.randn(len(regs)))])
-        #print(regs_values)
+            # use aggregated regs to read all values and create dictionary with reg:value pairs
+            if self.connected:
+                regs_values = dict([reg_value for regs in regs_aggr for reg_value in zip(regs, self.servo.read_registers(int(regs[0]), len(regs)))])
+            else:
+                regs_values = dict([reg_value for regs in regs_aggr for reg_value in zip(regs, [int(value*100) for value in np.random.randn(len(regs))])])
+            #print(regs_values)
 
-        # iterate active curves and use associated regs to look up values
-        for curve,regs in curves_regs.items():
-            values = [regs_values[reg] for reg in regs] 
-            curve.appendData(values)
+            # iterate active curves and use associated regs to look up values
+            for curve,regs in curves_regs.items():
+                values = [regs_values[reg] for reg in regs] 
+                curve.appendData(values)
+        except:
+            print('Error updating data')
 
     def startStopMonitor(self):
-        if (self.pbOpenCloseComport.text() == 'Open Comport'):
-            return
         if (self.pbStartStopMonitor.text() == 'Start Monitor'):
             self.monitorTimer = QTimer()
             self.monitorTimer.timeout.connect(self.updateCurves)

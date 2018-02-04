@@ -10,7 +10,7 @@ You will need Python3, PyQt5, PyQtGraph, PySerial, Numpy and MinimalModbus.
 
 ### Linux
 
-## DOES NOT WORK YET (no graphs are shown)
+DOES NOT WORK YET (no graphs are shown)
 * sudo apt install python3 python3-pip python3-pyqt5 python3-pyqt5.qtserialport
 * pip3 install setuptools pyqtgraph pyserial numpy minimalmodbus
 

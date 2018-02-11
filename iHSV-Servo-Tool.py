@@ -314,6 +314,8 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage("Device does not respond", 2000)
                 return
         else:
+            if (self.pbStartStopMonitor.text() == 'Stop Monitor'):
+                self.startStopMonitor()
             try:
                 self.servo.serial.close()
                 self.statusBar().showMessage("Port closed", 2000)

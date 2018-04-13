@@ -25,6 +25,13 @@ After installing, you can install the other prerequisites using [conda](https://
 
 After that, you should be able to run "iHSV Servo Tool" executing "python iHSV-Servo-Tool.py" in its directory.
 
+### MacOS
+
+For installing PyQT5, you should have [homebrew](https://brew.sh) installed.
+
+* brew install pyqt5
+* pip3 install setuptools pyqtgraph pyserial numpy minimalmodbus
+
 ## Operation
 
 The program stores its window location, size, comport and the settings for each plot (its color, if it's active and the axis it scales with) when exited. Upon restart, all settings will be restored.

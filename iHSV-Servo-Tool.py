@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+#
 # iHSV Servo Tool
 # Copyright (C) 2018 Robert Budde
 
@@ -21,6 +23,7 @@ from PyQt5.QtSerialPort import QSerialPortInfo
 
 import pyqtgraph as pg
 
+import os
 import time
 import numpy as np
 import serial
@@ -273,7 +276,10 @@ class MainWindow(QMainWindow):
 
         comports = QSerialPortInfo.availablePorts()
         for comport in comports:
-            self.cbSelectComport.addItem(comport.portName());
+            port = comport.portName()
+            if os.path.exists(os.path.join("/dev", port)):
+                port = os.path.join("/dev", port)
+            self.cbSelectComport.addItem(port);
 
         self.readSettings()
         
@@ -370,7 +376,7 @@ class MainWindow(QMainWindow):
                 return
 
             # get list of all registers that need to be read
-            regs_list = [reg for regs in curves_regs.values() for reg in regs]
+            regs_list = sorted([reg for regs in curves_regs.values() for reg in regs])
             #print(regs_list)
 
             # get list of aggregated lists (tolerate gaps of up to 2 regs)

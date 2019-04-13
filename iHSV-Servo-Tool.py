@@ -23,8 +23,9 @@ from PyQt5.QtSerialPort import QSerialPortInfo
 
 import pyqtgraph as pg
 
+from iHSV_Properties import iHSV
+
 import os
-import time
 import numpy as np
 import serial
 import minimalmodbus
@@ -41,7 +42,7 @@ class ModBusDataCurveItem(pg.PlotCurveItem):
         self.registers = registers
         self.signed = signed
         self.settings = settings
-        self.color = QColor(255,255,255)
+        self.color = QColor(255, 255, 255)
 
         self.widget = QWidget()
         layout = QGridLayout(self.widget)
@@ -136,55 +137,77 @@ class ModBusDataCurveItem(pg.PlotCurveItem):
     def getRegisters(self):
         return self.registers
 
+
 class MainWindow(QMainWindow):
-    configDataInfos = [
-        [0x06, 'Control Mode'],
-        [0x07, 'Control Mode Signal'],
-        [0x08, 'Mode 2'],
-        [0x0A, 'Motor/Encoder: Line'],
-        [0x31, 'Input offset'],
-        [0x32, 'Simulation command weighted coefficient'],
-        [0x46, 'Electronic gear: Nominator'],
-        [0x47, 'Electronic gear: Denominator'],
-        [0x40, 'Pp'],
-        [0x41, 'Pd'],
-        [0x42, 'Pff'],
-        [0x45, 'Pos Filter'],
-        [0x48, 'Pos Error'],
-
-        [0x50, 'Vp'],
-        [0x51, 'Vi'],
-        [0x52, 'Vd'],
-        [0x53, 'Aff'],
-        [0x54, 'Vel Filter'],
-        [0x55, 'Continuous Vel'],
-        [0x56, 'Vel Limit'],
-        [0x57, 'Acc'],
-        [0x58, 'Dec'],
-
-        [0x60, 'Cp'],
-        [0x61, 'Ci'],
-        [0x62, 'Continuous Current'],
-        [0x63, 'Limit Current'],
-
-        [0x3A, 'Temp Limit'],
-        [0x3B, 'Over Voltage Limit'],
-        [0x3C, 'Under Voltage Limit'],
-        [0x3D, 'I2T Limit'],
-    ]
-
-    liveDataInfos = [
-        [[0x85,0x86], False, 'Pos Cmd'],
-        [[0x87,0x88], False, 'Real Pos'],
-        [[0x89], True, 'Pos Error'],
-
-        [[0x90], True, 'Vel Cmd [Rpm]'],
-        [[0x91], True, 'Real Vel [Rpm]'],
-        [[0x92], True, 'Vel Error [Rpm]'],
-
-        [[0xA0], True, 'Torque Current Cmd'],
-        [[0xA1], True, 'Real Torque Current'],
-    ]
+    # parity = {
+    #     'v5': serial.PARITY_NONE,
+    #     'v6': serial.PARITY_EVEN
+    # }
+    #
+    # configDataInfos = [
+    #     [0x06, 'Control Mode'],
+    #     [0x07, 'Control Mode Signal'],
+    #     [0x08, 'Mode 2'],
+    #     [0x0A, 'Motor/Encoder: Line'],
+    #     [0x31, 'Input offset'],
+    #     [0x32, 'Simulation command weighted coefficient'],
+    #     [0x46, 'Electronic gear: Nominator'],
+    #     [0x47, 'Electronic gear: Denominator'],
+    #     [0x40, 'Pp'],
+    #     [0x41, 'Pd'],
+    #     [0x42, 'Pff'],
+    #     [0x45, 'Pos Filter'],
+    #     [0x48, 'Pos Error'],
+    #
+    #     [0x50, 'Vp'],
+    #     [0x51, 'Vi'],
+    #     [0x52, 'Vd'],
+    #     [0x53, 'Aff'],
+    #     [0x54, 'Vel Filter'],
+    #     [0x55, 'Continuous Vel'],
+    #     [0x56, 'Vel Limit'],
+    #     [0x57, 'Acc'],
+    #     [0x58, 'Dec'],
+    #
+    #     [0x60, 'Cp'],
+    #     [0x61, 'Ci'],
+    #     [0x62, 'Continuous Current'],
+    #     [0x63, 'Limit Current'],
+    #
+    #     [0x3A, 'Temp Limit'],
+    #     [0x3B, 'Over Voltage Limit'],
+    #     [0x3C, 'Under Voltage Limit'],
+    #     [0x3D, 'I2T Limit'],
+    # ]
+    #
+    # liveDataInfos = {
+    #     'v5': [
+    #         [[0x85, 0x86], False, 'Pos Cmd'],
+    #         [[0x87, 0x88], False, 'Real Pos'],
+    #         [[0x89], True, 'Pos Error'],
+    #
+    #         [[0x90], True, 'Vel Cmd [Rpm]'],
+    #         [[0x91], True, 'Real Vel [Rpm]'],
+    #         [[0x92], True, 'Vel Error [Rpm]'],
+    #
+    #         [[0xA0], True, 'Torque Current Cmd'],
+    #         [[0xA1], True, 'Real Torque Current'],
+    #     ],
+    #     'v6': [
+    #         # [[0x0834], False, 'Pos Cmd'],
+    #         # [[0x0836], False, 'Pos Feedback'],
+    #         # [[0x0838], True, 'Pos Error'],
+    #         [[0x083A, 0x083B], True, 'Pos Cmd'],
+    #         [[0x083C, 0x083D], True, 'Pos Feedback'],
+    #         [[0x083E], True, 'Pos Error'],
+    #
+    #         [[0x0841], True, 'Vel Cmd [rpm]'],
+    #         [[0x0842], True, 'Vel Feedback [rpm]'],
+    #
+    #         [[0x0843], True, 'Torque Cmd [%]'],
+    #         [[0x0844], True, 'Torque Feedback [%]']
+    #     ]
+    # }
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -194,7 +217,11 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("IBB", "iHSV57 Servo Tool")
         self.connected = False
 
+        self.motorversion = 'v5'
+        self.ihsv = iHSV(self.motorversion)
+
         ## Create some widgets to be placed inside
+        self.cbSelectMotorVersion = QComboBox()
         self.cbSelectComport = QComboBox()
         self.pbOpenCloseComport = QPushButton('Open Comport')
         self.pbOpenCloseComport.clicked.connect(self.openCloseComport)
@@ -237,19 +264,13 @@ class MainWindow(QMainWindow):
         updateViews()
         self.plot.getViewBox().sigResized.connect(updateViews)
 
-        vbox = QVBoxLayout()
-        self.curves = [];
-        for liveDataInfo in self.liveDataInfos:
-            regs = liveDataInfo[0]
-            curve = ModBusDataCurveItem(liveDataInfo[2], regs, liveDataInfo[1], settings=self.settings)
-            curve.signalAttachToAxis.connect(self.attachCurve)
-            curve.attachToAxis()
-            self.curves += [curve]
-            vbox.addWidget(curve.widget)
+        self.vbox = QVBoxLayout()
+
+        self.getDataPlots()
 
         self.groupBox = QGroupBox('Data plots')
-        vbox.addStretch(1)
-        self.groupBox.setLayout(vbox)
+        self.vbox.addStretch(1)
+        self.groupBox.setLayout(self.vbox)
 
         ## Define a top-level widget to hold everything
         self.widget = QWidget()
@@ -264,26 +285,56 @@ class MainWindow(QMainWindow):
         layout.setColumnStretch(1, 1)
         layout.setColumnMinimumWidth(1, 200)
         layout.setColumnMinimumWidth(2, 200)
-        layout.addWidget(self.cbSelectComport, 1, 0)   # comport-combobox goes in upper-left
-        layout.addWidget(self.pbOpenCloseComport, 2, 0)   # open/close button goes in middle-left
-        layout.addWidget(self.pbReadParams, 3, 0)
-        layout.addWidget(self.pbStartStopMonitor, 4, 0)
-        layout.addWidget(self.ParamTable, 1, 1, 4, 2)  # list widget goes in bottom-left
+        layout.addWidget(self.cbSelectMotorVersion, 1, 0)  # MotorVersion-combobox goes in upper-left
+        layout.addWidget(self.cbSelectComport, 2, 0)   # comport-combobox goes in 2nd upper-left
+        layout.addWidget(self.pbOpenCloseComport, 3, 0)   # open/close button goes in middle-left
+        layout.addWidget(self.pbReadParams, 4, 0)
+        layout.addWidget(self.pbStartStopMonitor, 5, 0)
+        layout.addWidget(self.ParamTable, 1, 1, 5, 2)  # list widget goes in bottom-left
 
         self.setCentralWidget(self.widget)
 
         self.createActions()
+
+        self.cbSelectMotorVersion.addItems(['iHSV57 v5x', 'iHSV57 v6x'])
+
+        self.onMotorVersionChange()
+        self.cbSelectMotorVersion.currentTextChanged.connect(self.onMotorVersionChange)
 
         comports = QSerialPortInfo.availablePorts()
         for comport in comports:
             port = comport.portName()
             if os.path.exists(os.path.join("/dev", port)):
                 port = os.path.join("/dev", port)
-            self.cbSelectComport.addItem(port);
+            self.cbSelectComport.addItem(port)
 
         self.readSettings()
         
         self.statusBar().showMessage("Ready", 2000)
+
+    def onMotorVersionChange(self):
+        versions = {'iHSV57 v5x': 'v5', 'iHSV57 v6x': 'v6'}
+        self.motorversion = versions[str(self.cbSelectMotorVersion.currentText())]
+        self.ihsv = iHSV(self.motorversion)
+        self.getDataPlots()
+
+    def getDataPlots(self):
+        self.curves = []
+
+        # remove all widgets from vbox layout
+        for i in reversed(range(self.vbox.count())):
+            try:
+                self.vbox.itemAt(i).widget().setParent(None)
+            except AttributeError:
+                pass
+
+        for liveDataInfo in self.ihsv.get_live_data_list():
+            regs = liveDataInfo[0]
+            curve = ModBusDataCurveItem(liveDataInfo[2], regs, liveDataInfo[1], settings=self.settings)
+            curve.signalAttachToAxis.connect(self.attachCurve)
+            curve.attachToAxis()
+            self.curves += [curve]
+            self.vbox.addWidget(curve.widget)
 
     def attachCurve(self, curve):
         try:
@@ -302,12 +353,13 @@ class MainWindow(QMainWindow):
         if not self.connected:
             try:
                 self.servo = minimalmodbus.Instrument(self.cbSelectComport.currentText(), 1)
-                self.servo.serial.baudrate = 57600   # Baud
-                self.servo.serial.bytesize = 8
-                self.servo.serial.parity   = serial.PARITY_NONE
-                self.servo.serial.stopbits = 1
-                self.servo.serial.timeout  = 0.5   # seconds
-            except:
+                self.servo.serial.baudrate = self.ihsv.get_rs232_settings('baudrate')
+                self.servo.serial.bytesize = self.ihsv.get_rs232_settings('bytesize')
+                self.servo.serial.parity   = self.ihsv.get_rs232_settings('parity')
+                self.servo.serial.stopbits = self.ihsv.get_rs232_settings('stopbits')
+                self.servo.serial.timeout  = self.ihsv.get_rs232_settings('timeout')
+            except Exception as e:
+                print(e)
                 self.statusBar().showMessage("Failed to open port", 2000)
                 return
             try:
@@ -340,7 +392,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Loading System Params...", 2000)
         self.ParamTable.setRowCount(len(self.configDataInfos))
         row = 0
-        for configDataInfo in self.configDataInfos:
+        for configDataInfo in self.ihsv.get_parameter_list(['All Parameter']):
             res = self.servo.read_register(configDataInfo[0])
             item = QTableWidgetItem('0x{0:02X}'.format(configDataInfo[0]))
             item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -435,8 +487,8 @@ class MainWindow(QMainWindow):
         for curve in self.curves:
             curve.writeSettings()
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     import sys
 
     app = QApplication(sys.argv)

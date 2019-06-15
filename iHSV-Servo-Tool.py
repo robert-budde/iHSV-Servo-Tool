@@ -23,8 +23,9 @@ from PyQt5.QtSerialPort import QSerialPortInfo
 
 import pyqtgraph as pg
 
+from iHSV_Properties import iHSV
+
 import os
-import time
 import numpy as np
 import serial
 import minimalmodbus
@@ -41,8 +42,7 @@ class ModBusDataCurveItem(pg.PlotCurveItem):
         self.registers = registers
         self.signed = signed
         self.settings = settings
-        self.color = QColor(255,255,255)
-
+        self.color = QColor(255, 255, 255)
         self.widget = QWidget()
         layout = QGridLayout(self.widget)
         self.colorButton = QPushButton()
@@ -57,7 +57,7 @@ class ModBusDataCurveItem(pg.PlotCurveItem):
         layout.addWidget(self.colorButton, 0, 0, 1, 2)
         layout.setColumnMinimumWidth(0, 30)
         layout.addWidget(self.label, 0, 1, 1, 2)
-        layout.setColumnMinimumWidth(1, 100)
+        layout.setColumnMinimumWidth(1, 150)
         layout.setColumnStretch(1, 0.5)
         layout.addWidget(self.activeCheckbox, 0, 2)
         layout.addWidget(self.axisCheckbox, 1, 2)
@@ -136,55 +136,8 @@ class ModBusDataCurveItem(pg.PlotCurveItem):
     def getRegisters(self):
         return self.registers
 
+
 class MainWindow(QMainWindow):
-    configDataInfos = [
-        [0x06, 'Control Mode'],
-        [0x07, 'Control Mode Signal'],
-        [0x08, 'Mode 2'],
-        [0x0A, 'Motor/Encoder: Line'],
-        [0x31, 'Input offset'],
-        [0x32, 'Simulation command weighted coefficient'],
-        [0x46, 'Electronic gear: Nominator'],
-        [0x47, 'Electronic gear: Denominator'],
-        [0x40, 'Pp'],
-        [0x41, 'Pd'],
-        [0x42, 'Pff'],
-        [0x45, 'Pos Filter'],
-        [0x48, 'Pos Error'],
-
-        [0x50, 'Vp'],
-        [0x51, 'Vi'],
-        [0x52, 'Vd'],
-        [0x53, 'Aff'],
-        [0x54, 'Vel Filter'],
-        [0x55, 'Continuous Vel'],
-        [0x56, 'Vel Limit'],
-        [0x57, 'Acc'],
-        [0x58, 'Dec'],
-
-        [0x60, 'Cp'],
-        [0x61, 'Ci'],
-        [0x62, 'Continuous Current'],
-        [0x63, 'Limit Current'],
-
-        [0x3A, 'Temp Limit'],
-        [0x3B, 'Over Voltage Limit'],
-        [0x3C, 'Under Voltage Limit'],
-        [0x3D, 'I2T Limit'],
-    ]
-
-    liveDataInfos = [
-        [[0x85,0x86], False, 'Pos Cmd'],
-        [[0x87,0x88], False, 'Real Pos'],
-        [[0x89], True, 'Pos Error'],
-
-        [[0x90], True, 'Vel Cmd [Rpm]'],
-        [[0x91], True, 'Real Vel [Rpm]'],
-        [[0x92], True, 'Vel Error [Rpm]'],
-
-        [[0xA0], True, 'Torque Current Cmd'],
-        [[0xA1], True, 'Real Torque Current'],
-    ]
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -194,24 +147,22 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("IBB", "iHSV57 Servo Tool")
         self.connected = False
 
+        self.motorversion = 'v5'
+        self.ihsv = iHSV(self.motorversion)
+
         ## Create some widgets to be placed inside
+        self.cbSelectMotorVersion = QComboBox()
         self.cbSelectComport = QComboBox()
         self.pbOpenCloseComport = QPushButton('Open Comport')
         self.pbOpenCloseComport.clicked.connect(self.openCloseComport)
         self.pbReadParams = QPushButton('Read Parameters')
+        self.cbSelectParameterGroup = QComboBox()
         self.pbReadParams.clicked.connect(self.readParams)
         self.pbStartStopMonitor = QPushButton('Start Monitor')
         self.pbStartStopMonitor.setFixedHeight(100)
         self.pbStartStopMonitor.clicked.connect(self.startStopMonitor)
 
-        self.ParamTable = QTableWidget(20, 3, self)
-        self.ParamTable.setHorizontalHeaderLabels(('Register', 'Value', 'Description'))
-        self.ParamTable.horizontalHeaderItem(0).setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.ParamTable.horizontalHeaderItem(1).setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.ParamTable.horizontalHeaderItem(2).setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.ParamTable.horizontalHeader().setResizeMode(0, QHeaderView.ResizeToContents)
-        self.ParamTable.horizontalHeader().setResizeMode(1, QHeaderView.ResizeToContents)
-        self.ParamTable.horizontalHeader().setResizeMode(2, QHeaderView.Stretch)
+        self.ParamTable = QTableWidget(1, 1, self)
 
         pg.setConfigOptions(antialias=False)
         self.plot = pg.PlotWidget()
@@ -219,7 +170,7 @@ class MainWindow(QMainWindow):
         self.plot.setClipToView(True)
         self.plot.setXRange(-100, 0)
         self.plot.setYRange(-200, 200)
-        self.plot.setLimits(xMin=-1000,xMax=0,minXRange=20,maxXRange=1000)
+        self.plot.setLimits(xMin=-1000, xMax=0, minXRange=20, maxXRange=1000)
         self.plot.setLabel('bottom', text='Time', units='s')
         self.plot.getAxis('bottom').setScale(0.01)
         self.plot.showAxis('right')
@@ -228,7 +179,7 @@ class MainWindow(QMainWindow):
         self.plot.scene().addItem(self.plot2ndAxis)
         self.plot.getAxis('right').linkToView(self.plot2ndAxis)
         self.plot2ndAxis.setXLink(self.plot)
-        self.plot2ndAxis.setYRange(-10,10)
+        self.plot2ndAxis.setYRange(-10, 10)
 
         def updateViews():
             self.plot2ndAxis.setGeometry(self.plot.getViewBox().sceneBoundingRect())
@@ -237,19 +188,13 @@ class MainWindow(QMainWindow):
         updateViews()
         self.plot.getViewBox().sigResized.connect(updateViews)
 
-        vbox = QVBoxLayout()
-        self.curves = [];
-        for liveDataInfo in self.liveDataInfos:
-            regs = liveDataInfo[0]
-            curve = ModBusDataCurveItem(liveDataInfo[2], regs, liveDataInfo[1], settings=self.settings)
-            curve.signalAttachToAxis.connect(self.attachCurve)
-            curve.attachToAxis()
-            self.curves += [curve]
-            vbox.addWidget(curve.widget)
+        self.vbox = QVBoxLayout()
+
+        self.getDataPlots()
 
         self.groupBox = QGroupBox('Data plots')
-        vbox.addStretch(1)
-        self.groupBox.setLayout(vbox)
+        self.vbox.addStretch(1)
+        self.groupBox.setLayout(self.vbox)
 
         ## Define a top-level widget to hold everything
         self.widget = QWidget()
@@ -263,27 +208,79 @@ class MainWindow(QMainWindow):
         layout.setColumnMinimumWidth(0, 200)
         layout.setColumnStretch(1, 1)
         layout.setColumnMinimumWidth(1, 200)
-        layout.setColumnMinimumWidth(2, 200)
-        layout.addWidget(self.cbSelectComport, 1, 0)   # comport-combobox goes in upper-left
-        layout.addWidget(self.pbOpenCloseComport, 2, 0)   # open/close button goes in middle-left
-        layout.addWidget(self.pbReadParams, 3, 0)
-        layout.addWidget(self.pbStartStopMonitor, 4, 0)
-        layout.addWidget(self.ParamTable, 1, 1, 4, 2)  # list widget goes in bottom-left
+        layout.setColumnMinimumWidth(2, 250)
+        layout.addWidget(self.cbSelectMotorVersion, 1, 0)  # MotorVersion-combobox goes in upper-left
+        layout.addWidget(self.cbSelectComport, 2, 0)   # comport-combobox goes in 2nd upper-left
+        layout.addWidget(self.pbOpenCloseComport, 3, 0)   # open/close button goes in middle-left
+        layout.addWidget(self.cbSelectParameterGroup, 4, 0)  # parameter-group-combobox
+        layout.addWidget(self.pbReadParams, 5, 0)
+        layout.addWidget(self.pbStartStopMonitor, 6, 0)
+        layout.addWidget(self.ParamTable, 1, 1, 6, 2)  # list widget goes in bottom-left
 
         self.setCentralWidget(self.widget)
 
         self.createActions()
+
+        self.cbSelectMotorVersion.addItems(self.ihsv.get_supported_motor_versions())
+
+        self.cbSelectMotorVersion.currentTextChanged.connect(self.onMotorVersionChange)
+
+        ## Call function to create initally the widgets depending on motorversion
+        self.onMotorVersionChange()
 
         comports = QSerialPortInfo.availablePorts()
         for comport in comports:
             port = comport.portName()
             if os.path.exists(os.path.join("/dev", port)):
                 port = os.path.join("/dev", port)
-            self.cbSelectComport.addItem(port);
+            self.cbSelectComport.addItem(port)
 
         self.readSettings()
         
         self.statusBar().showMessage("Ready", 2000)
+
+    def onMotorVersionChange(self):
+        self.motorversion = self.ihsv.supported_motor_versions[str(self.cbSelectMotorVersion.currentText())]
+        self.ihsv = iHSV(self.motorversion)
+
+        self.getDataPlots()
+
+        self.cbSelectParameterGroup.clear()
+        self.cbSelectParameterGroup.addItems(self.ihsv.get_parameter_group_list())
+
+        self.createParameterTable()
+
+    def getDataPlots(self):
+        self.curves = []
+
+        # remove all widgets from vbox layout
+        for i in reversed(range(self.vbox.count())):
+            try:
+                self.vbox.itemAt(i).widget().setParent(None)
+            except AttributeError:
+                pass
+
+        for liveDataInfo in self.ihsv.get_live_data_list():
+            regs = liveDataInfo[0]
+            curve = ModBusDataCurveItem(liveDataInfo[2], regs, liveDataInfo[1], settings=self.settings)
+            curve.signalAttachToAxis.connect(self.attachCurve)
+            curve.attachToAxis()
+            self.curves += [curve]
+            self.vbox.addWidget(curve.widget)
+
+    def createParameterTable(self):
+        header = self.ihsv.get_selected_motor_parameter()
+        self.ParamTable.setColumnCount(len(header))
+        self.ParamTable.setRowCount(20)
+        self.ParamTable.setHorizontalHeaderLabels(header)
+        self.ParamTable.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.ParamTable.verticalHeader().setVisible(False)
+
+        for col_nbr, col_name in enumerate(header):
+            if col_name == 'Description':
+                self.ParamTable.horizontalHeader().setResizeMode(col_nbr, QHeaderView.Stretch)
+            else:
+                self.ParamTable.horizontalHeader().setResizeMode(col_nbr, QHeaderView.ResizeToContents)
 
     def attachCurve(self, curve):
         try:
@@ -302,20 +299,24 @@ class MainWindow(QMainWindow):
         if not self.connected:
             try:
                 self.servo = minimalmodbus.Instrument(self.cbSelectComport.currentText(), 1)
-                self.servo.serial.baudrate = 57600   # Baud
-                self.servo.serial.bytesize = 8
-                self.servo.serial.parity   = serial.PARITY_NONE
-                self.servo.serial.stopbits = 1
-                self.servo.serial.timeout  = 0.5   # seconds
-            except:
+                self.servo.serial.baudrate = self.ihsv.get_rs232_settings('baudrate')
+                self.servo.serial.bytesize = self.ihsv.get_rs232_settings('bytesize')
+                self.servo.serial.parity   = self.ihsv.get_rs232_settings('parity')
+                self.servo.serial.stopbits = self.ihsv.get_rs232_settings('stopbits')
+                self.servo.serial.timeout  = self.ihsv.get_rs232_settings('timeout')
+            except Exception as e:
+                print(e)
                 self.statusBar().showMessage("Failed to open port", 2000)
                 return
             try:
+                if not self.servo.serial.isOpen():
+                    self.servo.serial.open()
                 self.servo.read_register(0x80)
                 self.statusBar().showMessage("Port opened successfully", 2000)
                 self.pbOpenCloseComport.setText('Close Comport')
                 self.connected = True
-            except:
+            except Exception as e:
+                print(e)
                 self.servo.serial.close()
                 self.statusBar().showMessage("Device does not respond", 2000)
                 return
@@ -325,7 +326,8 @@ class MainWindow(QMainWindow):
             try:
                 self.servo.serial.close()
                 self.statusBar().showMessage("Port closed", 2000)
-            except:
+            except Exception as e:
+                print(e)
                 pass
             self.pbOpenCloseComport.setText('Open Comport')
             self.connected = False
@@ -335,37 +337,70 @@ class MainWindow(QMainWindow):
             return
         try:
             self.ParamTable.cellChanged.disconnect(self.writeParams)
-        except Exception:
+        except Exception as e:
+            print(e)
             pass
         self.statusBar().showMessage("Loading System Params...", 2000)
-        self.ParamTable.setRowCount(len(self.configDataInfos))
+        par_list = self.ihsv.get_parameter_list([self.cbSelectParameterGroup.currentText()])
+        self.ParamTable.setRowCount(len(par_list))
         row = 0
-        for configDataInfo in self.configDataInfos:
-            res = self.servo.read_register(configDataInfo[0])
-            item = QTableWidgetItem('0x{0:02X}'.format(configDataInfo[0]))
-            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.ParamTable.setItem(row, 0, item)
-            item = QTableWidgetItem('{0:5d}'.format(res))
-            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.ParamTable.setItem(row, 1, item)
-            self.ParamTable.setItem(row, 2, QTableWidgetItem(configDataInfo[1]))
-            row = row + 1
+
+        # lists to store address and decimal factor of each row -> necessary for writeParams
+        self.ParamTable.addressList = []
+        self.ParamTable.decimalList = []
+        for configDataInfo in par_list:
+            reg = int(configDataInfo['Address'], 16)
+            self.ParamTable.addressList.append(reg)
+            val = self.servo.read_register(reg)
+
+            # move decimal point
+            if 'decimal_place' in configDataInfo.keys():
+                decimal = int(configDataInfo['decimal_place'])
+                if decimal != 0:
+                    val /= 10**int(configDataInfo['decimal_place'])
+                self.ParamTable.decimalList.append(decimal)
+            else:
+                self.ParamTable.decimalList.append(0)
+
+            configDataInfo['Value'] = val
+            for col, par in enumerate(self.ihsv.get_selected_motor_parameter()):
+                item = QTableWidgetItem(str(configDataInfo[par]))
+                if par != 'Value':
+                    # item.setBackground(QColor('lightgrey'))
+                    item.setFlags(Qt.ItemIsEditable)
+                try:
+                    # check if data is a number
+                    float(item.text())
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignTop)
+
+                except ValueError:
+                    item.setTextAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+                self.ParamTable.setItem(row, col, item)
+            row += 1
+        self.ParamTable.resizeRowsToContents()
         self.ParamTable.cellChanged.connect(self.writeParams)
         self.statusBar().showMessage("Loading System Params done!", 2000)
 
     def writeParams(self, row, column):
         if not self.connected:
             return
-        if column != 1:
+        if self.ParamTable.horizontalHeaderItem(column).text() != 'Value':
             return
         try:
-            value = int(self.ParamTable.item(row, column).text())
-        except:
+            value = self.ParamTable.item(row, column).text()
+
+            # move decimal point
+            if self.ParamTable.decimalList[row] != 0:
+                value = float(value) * 10 ** self.ParamTable.decimalList[row]
+            value = int(value)
+        except Exception as e:
+            print(e)
             self.statusBar().showMessage("Failed to convert Config Value...", 2000)
             return
-        reg = self.configDataInfos[row][0]
+        reg = self.ParamTable.addressList[row]
         self.servo.write_register(reg, value, functioncode=6)
-        self.statusBar().showMessage("Writing {0} to 0x{1:02x} done!".format(value, reg), 2000)
+        self.statusBar().showMessage("Writing {0} to 0x{1:02x} done!".format(value, reg), 5000)
 
     def updateCurves(self):
         try:
@@ -435,8 +470,8 @@ class MainWindow(QMainWindow):
         for curve in self.curves:
             curve.writeSettings()
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     import sys
 
     app = QApplication(sys.argv)

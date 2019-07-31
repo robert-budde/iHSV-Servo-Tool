@@ -30,123 +30,123 @@ class iHSV:
             'All Parameter': {
                 'P00-01': {
                     'Description': 'Control Mode',
-                    'Address': 0x06
+                    'Address': '0x06'
                 },
                 'P00-02': {
                     'Description': 'Control Mode Signal',
-                    'Address': 0x07
+                    'Address': '0x07'
                 },
                 'P00-03': {
                     'Description': 'Mode 2',
-                    'Address': 0x08
+                    'Address': '0x08'
                 },
                 'P00-04': {
                     'Description': 'Motor/Encoder: Line',
-                    'Address': 0x0A
+                    'Address': '0x0A'
                 },
                 'P00-05': {
                     'Description': 'Input offset',
-                    'Address': 0x31
+                    'Address': '0x31'
                 },
                 'P00-06': {
                     'Description': 'Simulation command weighted coefficient',
-                    'Address': 0x32
+                    'Address': '0x32'
                 },
                 'P00-07': {
                     'Description': 'Electronic gear: Nominator',
-                    'Address': 0x46
+                    'Address': '0x46'
                 },
                 'P00-08': {
                     'Description': 'Electronic gear: Denominator',
-                    'Address': 0x47
+                    'Address': '0x47'
                 },
                 'P00-09': {
                     'Description': 'Pp',
-                    'Address': 0x40
+                    'Address': '0x40'
                 },
                 'P00-10': {
                     'Description': 'Pd',
-                    'Address': 0x41
+                    'Address': '0x41'
                 },
                 'P00-11': {
                     'Description': 'Pff',
-                    'Address': 0x42
+                    'Address': '0x42'
                 },
                 'P00-12': {
                     'Description': 'Pos Filter',
-                    'Address': 0x45
+                    'Address': '0x45'
                 },
                 'P00-13': {
                     'Description': 'Pos Error',
-                    'Address': 0x48
+                    'Address': '0x48'
                 },
                 'P00-14': {
                     'Description': 'Vp',
-                    'Address': 0x50
+                    'Address': '0x50'
                 },
                 'P00-15': {
                     'Description': 'Vi',
-                    'Address': 0x51
+                    'Address': '0x51'
                 },
                 'P00-16': {
                     'Description': 'Vd',
-                    'Address': 0x52
+                    'Address': '0x52'
                 },
                 'P00-17': {
                     'Description': 'Aff',
-                    'Address': 0x53
+                    'Address': '0x53'
                 },
                 'P00-18': {
                     'Description': 'Vel Filter',
-                    'Address': 0x54
+                    'Address': '0x54'
                 },
                 'P00-19': {
                     'Description': 'Continuous Vel',
-                    'Address': 0x55
+                    'Address': '0x55'
                 },
                 'P00-20': {
                     'Description': 'Vel Limit',
-                    'Address': 0x56
+                    'Address': '0x56'
                 },
                 'P00-21': {
                     'Description': 'Acc',
-                    'Address': 0x57
+                    'Address': '0x57'
                 },
                 'P00-22': {
                     'Description': 'Dec',
-                    'Address': 0x58
+                    'Address': '0x58'
                 },
                 'P00-23': {
                     'Description': 'Cp',
-                    'Address': 0x60
+                    'Address': '0x60'
                 },
                 'P00-24': {
                     'Description': 'Ci',
-                    'Address': 0x61
+                    'Address': '0x61'
                 },
                 'P00-25': {
                     'Description': 'Continuous Current',
-                    'Address': 0x62
+                    'Address': '0x62'
                 },
                 'P00-26': {
                     'Description': 'Limit Current',
-                    'Address': 0x63
+                    'Address': '0x63'
                 },
                 'P00-27': {
                     'Description': 'Temp Limit',
-                    'Address': 0x3A
+                    'Address': '0x3A'
                 },
                 'P00-28': {
                     'Description': 'Over Voltage Limit',
-                    'Address': 0x3B
+                    'Address': '0x3B'
                 },
                 'P00-29': {
                     'Description': 'Under Voltage Limit',
-                    'Address': 0x3C
+                    'Address': '0x3C'
                 },
                 'P00-30': {
                     'Description': 'I2T Limit',
-                    'Address': 0x3D
+                    'Address': '0x3D'
                 },
 
             }

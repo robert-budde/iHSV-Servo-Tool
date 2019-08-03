@@ -9356,7 +9356,7 @@ class iHSV:
         'v5': (
             'Address',
             'Value',
-            'Name'
+            'Description'
         ),
         'v6': (
             'Address',
